@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LED Grid Animator</title>
+  <style>
+    canvas {
+      border: 1px solid #000;
+    }
+    .timeline {
+      width: 80%;
+      margin: 10px auto;
+      height: 20px;
+      position: relative;
+      cursor: pointer;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      overflow: hidden;
+      display: flex;
+    }
+    .timeline-frame {
+      height: 100%;
+      flex-grow: 1;
+      background-color: #555;
+      opacity: 0.5;
+    }
+    .timeline-frame:hover {
+      opacity: 1;
+    }
+    .play-btn {
+      margin-top: 10px;
+    }
+    .frame-count {
+      margin-top: 5px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="ledCanvas" width="400" height="200"></canvas>
+  <input type="color" id="colorPicker" value="#FFFFFF">
+  <button onclick="selectTool('pencil')">Pencil</button>
+  <button onclick="selectTool('eraser')">Eraser</button>
+  <button onclick="saveAnimation()">Save Animation</button>
+  <button onclick="addNewFrame()">Add New Frame</button>
+  <button onclick="prevFrame()">Previous Frame</button>
+  <button onclick="nextFrame()">Next Frame</button>
+  <button onclick="playAnimation()" class="play-btn">Play Animation</button>
+
+  <input type="file" accept="image/*" id="fileInput">
+  <button onclick="addImage()">Add Image</button>
+  <div class="frame-count">Frame: <span id="frameNumber">0</span>/<span id="totalFrames">0</span></div>
+  <div class="timeline" id="timeline"></div>
+  
+  <script>
+    const cols = 48; // Number of columns
+    const rows = 67; // Number of rows
+    const cellSize = 5; // Cell size
+    
+    const w = 20; // Horizontal margin
+    const h = 5; // Vertical margin
+    const canvas = document.getElementById('ledCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width  = (cellSize + w) *cols;
+    canvas.height = (cellSize + h)*rows;
+    
+    
+    let animationFrames = [];
+    let currentFrameIndex = 0;
+    let currentTool = 'pencil';
+    let isDrawing = false;
+    let playInterval;
+
+    // Initialize grid
+    function initGrid() {
+     
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      animationFrames.push(new Array(rows *cols *4).fill(0));
+      
+    }
+    initGrid();
+    function hexToRgb(hex) {
+      // Remove the hash if it exists
+      hex = hex.replace(/^#/, '');
+      // Parse the RGB values
+      const bigint = parseInt(hex, 16);
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const a =0 ;
+      const b = parseInt(hex.slice(5, 7), 16);
+      var newArray = new Array(4);
+      newArray[0] = r ; 
+      newArray[1] = g;
+      newArray[2] = b ;
+      newArray[3]= a;
+      return newArray;
+    }
+    
+
+    // Function to draw on the canvas
+    function drawPixel(x, y, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x * (cellSize + w), y * (cellSize + h), cellSize, cellSize);
+      if (color.length>4){
+        color = hexToRgb(color);
+      }
+      console.log(color);
+      for(var i =0 ; i <4 ;  i++){
+        animationFrames[currentFrameIndex][y*cols + x+i] =color[i] ;
+      }
+    }
+
+    // Mouse interaction to draw on the canvas
+    canvas.addEventListener('mousedown', (e) => {
+      isDrawing = true;
+      draw(e);
+    });
+    canvas.addEventListener('mousemove', (e) => {
+      if (isDrawing) {
+        draw(e);
+      }
+    });
+    canvas.addEventListener('mouseup', () => {
+      isDrawing = false;
+      saveFrame();
+    });
+    
+    let isShiftPressed = false; // Track if the Shift key is pressed
+
+    // Mouse interaction to draw on the canvas
+    canvas.addEventListener('mousedown', (e) => {
+      isDrawing = true;
+      isShiftPressed = e.shiftKey; // Check if the Shift key is pressed when starting to draw
+      draw(e);
+    });
+    function draw(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / (cellSize + w));
+      const y = Math.floor((e.clientY - rect.top) / (cellSize + h));
+      const color = document.getElementById('colorPicker').value;
+      if (currentTool === 'pencil') {
+        drawPixel(x, y, color);
+      } else if (currentTool === 'eraser') {
+        drawPixel(x, y, 'black');
+      }
+    }
+    function selectTool(tool) {
+      currentTool = tool;
+    }
+
+    // Function to save the current frame
+    function saveFrame() {
+      //const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      //animationFrames[currentFrameIndex] = Array.from(imageData.data); 
+      //console.log(animationFrames[currentFrameIndex].length)
+      updateTimeline();
+    }
+
+    // Function to add a new frame
+    function addNewFrame() {
+      animationFrames.push([...animationFrames[currentFrameIndex]] || new Array(canvas.width * canvas.height * 4).fill(0)); // Add a duplicate of the current frame or a blank frame if no frame exists
+      currentFrameIndex = animationFrames.length - 1;
+      renderFrame();
+      updateTimeline();
+    }
+
+    // Function to navigate to the previous frame
+    function prevFrame() {
+      if (currentFrameIndex > 0) {
+        currentFrameIndex--;
+        renderFrame();
+        updateTimeline();
+      }
+    }
+
+    // Function to navigate to the next frame
+    function nextFrame() {
+      if (currentFrameIndex < animationFrames.length - 1) {
+        currentFrameIndex++;
+        renderFrame();
+        updateTimeline();
+      }
+    }
+
+    // Function to render the current frame on the
+    // Function to render the current frame on the canvas
+    function renderFrame() {
+      const frame = animationFrames[currentFrameIndex];
+      if (frame) {
+        const imageData = new ImageData(new Uint8ClampedArray(frame), canvas.width, canvas.height);
+        ctx.putImageData(imageData, 0, 0);
+      }
+    }
+
+    // Function to update the timeline based on frames
+    function updateTimeline() {
+      const timeline = document.getElementById('timeline');
+      const totalFrames = animationFrames.length;
+      let timelineHtml = '';
+      for (let i = 0; i < totalFrames; i++) {
+        timelineHtml += `<div class="timeline-frame"></div>`;
+      }
+      timeline.innerHTML = timelineHtml;
+
+      // Add event listeners to each frame
+      const timelineFrames = document.querySelectorAll('.timeline-frame');
+      timelineFrames.forEach((frame, index) => {
+        frame.addEventListener('click', () => {
+          goToFrame(index);
+        });
+      });
+
+      document.getElementById('frameNumber').innerText = currentFrameIndex + 1;
+      document.getElementById('totalFrames').innerText = totalFrames;
+    }
+
+    // Function to navigate to a specific frame from the timeline
+    function goToFrame(index) {
+      currentFrameIndex = index;
+      renderFrame();
+      updateTimeline();
+    }
+
+  function addImage() {
+    const fileInput = document.getElementById('fileInput');
+    fileInput.click(); // Trigger the file input
+    fileInput.addEventListener('change', function() {
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+          const aspectRatio = img.width / img.height;
+          const canvasAspectRatio = canvas.width / canvas.height;
+
+          let newWidth = canvas.width;
+          let newHeight = canvas.height;
+
+          if (aspectRatio > canvasAspectRatio) {
+            newWidth = canvas.width;
+            newHeight = newWidth / aspectRatio;
+          } else {
+            newHeight = canvas.height;
+            newWidth = newHeight * aspectRatio;
+          }
+
+          const x = (canvas.width - newWidth) / 2;
+          const y = (canvas.height - newHeight) / 2;
+
+          ctx.drawImage(img, x, y, newWidth, newHeight);
+
+          const pixelData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const pixelArray = pixelData.data;
+          animationFrames[currentFrameIndex] = [...pixelArray]; // Save pixel values for the current frame
+          updateTimeline();
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  function saveAnimation() {
+    let pixelDataString = ``;
+    console.log(animationFrames[0]);
+
+    for (let i = 0; i < animationFrames.length; i++) {
+        for (let y = 0; y < cols * rows; y++) {
+            const index = y * 4; // Each pixel takes 4 values (R, G, B, A)
+            const r = animationFrames[i][index];
+            const g = animationFrames[i][index + 1];
+            const b = animationFrames[i][index + 2];
+
+            // Adjust the coordinates to label pixels accordingly
+            pixelDataString += `${r} ${g} ${b} | `;
+        }
+        pixelDataString += `\n`;
+    }
+
+    // Create a Blob containing all frames' pixel data string
+    const blob = new Blob([pixelDataString], { type: 'text/plain' });
+
+    // Create a download link
+    const downloadLink = document.createElement('a');
+    downloadLink.href = URL.createObjectURL(blob);
+    downloadLink.download = 'animation_data.txt';
+
+    // Append the link to the body
+    document.body.appendChild(downloadLink);
+
+    // Trigger a click on the link to start the download
+    downloadLink.click();
+
+    // Remove the link from the DOM
+    document.body.removeChild(downloadLink);
+}
+
+    
+  
+    // ... (Add the remaining functions like selectTool, playAnimation, etc. as needed) ...
+
+  </script>
+</body>
+</html>
